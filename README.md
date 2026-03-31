@@ -1,111 +1,177 @@
-# 📌 Word Vectorizer Models in NLP
+# ==============================
+# IMPORTS
+# ==============================
+import pandas as pd
+import numpy as np
+import time
+import re
 
-## 📖 Project Overview
-This project explores and compares different word vectorization techniques used in Natural Language Processing (NLP) for text classification. The goal is to understand how different methods impact model performance, computational efficiency, and feature representation.
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-The project is implemented on the **SMS Spam Collection Dataset**, where messages are classified as **Spam** or **Ham (Not Spam)**.
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
----
+import nltk
+from nltk.corpus import stopwords
+from gensim.models import Word2Vec
 
-## 🎯 Objectives
-- To implement multiple word vectorization techniques
-- To compare their performance on a classification task
-- To analyze trade-offs between accuracy and computational complexity
-- To understand the impact of feature representation in NLP models
-
----
-
-## 🧠 Vectorization Techniques Used
-1. **Bag of Words (BoW)**
-2. **TF-IDF**
-3. **N-grams (Bi-grams)**
-4. **Word2Vec**
-
----
-
-## ⚙️ Methodology
-- Text preprocessing (cleaning, normalization, tokenization)
-- Feature extraction using different vectorization techniques
-- Model training using **Logistic Regression**
-- Evaluation using standard metrics
-
----
-
-## 📊 Evaluation Metrics
-- Accuracy
-- Precision
-- Recall
-- F1-score
-
----
-
-## 📈 Results Summary
-
-| Model     | Accuracy |
-|----------|---------|
-| BoW      | 97.75%  |
-| TF-IDF   | 96.68%  |
-| N-grams  | 98.02%  |
-| Word2Vec | 87.98%  |
-
-🔹 **N-grams achieved the highest accuracy**, showing the importance of contextual word patterns in spam detection.
-
----
-
-## 🔍 Key Insights
-- Spam detection relies heavily on **keyword patterns and phrases**
-- **N-grams outperform** other methods by capturing context
-- **Word2Vec underperforms** in this task as it focuses on semantic meaning
-- Simpler models can outperform complex ones depending on the task
-
----
-
-## ⚖️ Trade-offs
-- N-grams → High accuracy, higher computational cost
-- BoW → Fast, but no context
-- TF-IDF → Balanced performance
-- Word2Vec → Semantic understanding but less effective for this task
-
----
-
-## 🧪 Technologies Used
-- Python
-- Pandas
-- NumPy
-- Scikit-learn
-- NLTK
-- Gensim
-- Matplotlib
-
----
-
-## 📂 Project Structure
-
-├── modeltrain.py
-├── spam.csv
-├── results.png
-├── README.md
-├── report.pdf
+nltk.download('stopwords')
 
 
----
+# ==============================
+# LOAD DATA
+# ==============================
+df = pd.read_csv("spam.csv", encoding='latin1')
 
-## 🚀 Future Work
-- Implement advanced models like **BERT**
-- Use deep learning models (LSTM, Transformers)
-- Apply to larger and more complex datasets
+# Keep only needed columns
+df = df[['v1', 'v2']]
 
----
+# Rename columns
+df.columns = ['label', 'content']
 
-## 👥 Contributors
-- Person 1: [M CHAITHANYA VARSHITH]
-- Person 2: [K SHREYAS REDDY]
+# Drop nulls
+df = df.dropna()
 
----
 
-## 📌 Conclusion
-This project demonstrates that the effectiveness of word vectorization techniques depends on the nature of the task. For spam detection, **N-grams proved to be the most effective**, highlighting the importance of contextual patterns over semantic embeddings.
+# ==============================
+# CLEAN TEXT
+# ==============================
+stop_words = set(stopwords.words('english'))
 
----
+def clean(text):
+    text = text.lower()
+    text = re.sub('[^a-z]', ' ', text)
+    words = text.split()
+    return " ".join(words)   # (no stopword removal for better results)
 
- If you found this project useful, feel free to star the repository!
+df['clean'] = df['content'].apply(clean)
+
+
+# ==============================
+# LABEL CONVERSION
+# ==============================
+df['label'] = df['label'].map({'ham':0, 'spam':1})
+
+print("Label Distribution:\n", df['label'].value_counts())
+
+
+# ==============================
+# SPLIT DATA
+# ==============================
+X_train, X_test, y_train, y_test = train_test_split(
+    df['clean'], df['label'], test_size=0.2, random_state=42
+)
+
+
+# ==============================
+# EVALUATION FUNCTION
+# ==============================
+def evaluate(y_test, pred):
+    return (
+        accuracy_score(y_test, pred),
+        precision_score(y_test, pred),
+        recall_score(y_test, pred),
+        f1_score(y_test, pred)
+    )
+
+
+results = []
+
+
+# ==============================
+# METHOD 1: BoW
+# ==============================
+start = time.time()
+
+bow = CountVectorizer(max_features=5000)
+X_train_bow = bow.fit_transform(X_train)
+X_test_bow = bow.transform(X_test)
+
+model = LogisticRegression(max_iter=2000)
+model.fit(X_train_bow, y_train)
+
+pred = model.predict(X_test_bow)
+
+results.append(["BoW", *evaluate(y_test, pred), time.time() - start])
+
+
+# ==============================
+# METHOD 2: TF-IDF
+# ==============================
+start = time.time()
+
+tfidf = TfidfVectorizer(max_features=5000)
+X_train_tf = tfidf.fit_transform(X_train)
+X_test_tf = tfidf.transform(X_test)
+
+model = LogisticRegression(max_iter=2000)
+model.fit(X_train_tf, y_train)
+
+pred = model.predict(X_test_tf)
+
+results.append(["TF-IDF", *evaluate(y_test, pred), time.time() - start])
+
+
+# ==============================
+# METHOD 3: N-GRAMS
+# ==============================
+start = time.time()
+
+ng = CountVectorizer(ngram_range=(1,2), max_features=5000)
+X_train_ng = ng.fit_transform(X_train)
+X_test_ng = ng.transform(X_test)
+
+model = LogisticRegression(max_iter=2000)
+model.fit(X_train_ng, y_train)
+
+pred = model.predict(X_test_ng)
+
+results.append(["N-grams", *evaluate(y_test, pred), time.time() - start])
+
+
+# ==============================
+# METHOD 4: WORD2VEC
+# ==============================
+sentences = [text.split() for text in X_train]
+w2v = Word2Vec(sentences, vector_size=100, window=5, min_count=2)
+
+def avg_vec(text):
+    words = text.split()
+    vecs = [w2v.wv[w] for w in words if w in w2v.wv]
+    return np.mean(vecs, axis=0) if vecs else np.zeros(100)
+
+start = time.time()
+
+X_train_w2v = np.array([avg_vec(text) for text in X_train])
+X_test_w2v = np.array([avg_vec(text) for text in X_test])
+
+model = LogisticRegression(max_iter=2000)
+model.fit(X_train_w2v, y_train)
+
+pred = model.predict(X_test_w2v)
+
+results.append(["Word2Vec", *evaluate(y_test, pred), time.time() - start])
+
+
+# ==============================
+# FINAL RESULTS
+# ==============================
+results_df = pd.DataFrame(results, columns=[
+    "Model", "Accuracy", "Precision", "Recall", "F1 Score", "Time"
+])
+
+print("\nFINAL RESULTS:\n")
+print(results_df)
+
+
+# ==============================
+# PLOTS
+# ==============================
+import matplotlib.pyplot as plt
+
+results_df.plot(x="Model", y="Accuracy", kind="bar", title="Accuracy Comparison")
+plt.show()
+
+results_df.plot(x="Model", y="Time", kind="bar", title="Time Comparison")
+plt.show()
